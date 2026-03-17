@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ShieldCheck, LogOut, User as UserIcon, Menu, Zap, ArrowRight, ShieldAlert, X, History } from 'lucide-react';
+import { ShieldCheck, LogOut, User as UserIcon, Menu, Zap, ShieldAlert, X, History, CreditCard, Settings } from 'lucide-react';
 import { User } from '../types';
 import { Logo } from './Logo';
 
@@ -10,11 +10,23 @@ interface LayoutProps {
   onLogout: () => void;
   onLogoClick?: () => void;
   onHistoryClick?: () => void;
+  onPricingClick?: () => void;
+  onAdminClick?: () => void;
   onLoginClick?: () => void;
   showLanding?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogoClick, onHistoryClick, onLoginClick, showLanding }) => {
+export const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  user, 
+  onLogout, 
+  onLogoClick, 
+  onHistoryClick, 
+  onPricingClick,
+  onAdminClick,
+  onLoginClick, 
+  showLanding 
+}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogoClick = () => {
@@ -44,6 +56,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogo
                   <a href="#struggles" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Struggles</a>
                   <a href="#solution" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Solution</a>
                   <a href="#how-it-works" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">How it Works</a>
+                  <button 
+                    onClick={onPricingClick}
+                    className="text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                  >
+                    Pricing
+                  </button>
                 </>
               ) : user ? (
                 <>
@@ -61,11 +79,31 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogo
                     <History className="w-4 h-4 mr-1.5" />
                     History
                   </button>
+                  <button 
+                    onClick={onPricingClick}
+                    className="text-sm font-medium text-slate-300 hover:text-white transition-colors flex items-center"
+                  >
+                    <CreditCard className="w-4 h-4 mr-1.5" />
+                    Pricing
+                  </button>
+                  {user.role === 'admin' && (
+                    <button 
+                      onClick={onAdminClick}
+                      className="text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors flex items-center"
+                    >
+                      <Settings className="w-4 h-4 mr-1.5" />
+                      Admin
+                    </button>
+                  )}
                 </>
               ) : null}
               
               {user ? (
                 <div className="flex items-center space-x-4 pl-4 border-l border-white/10">
+                  <div className="flex flex-col items-end mr-2">
+                    <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Credits</span>
+                    <span className="text-sm font-bold text-[#00a3e0]">{user.credits ?? 0}</span>
+                  </div>
                   <div className="flex items-center space-x-3 px-4 py-2 bg-white/5 rounded-full border border-white/10">
                     <div className="w-6 h-6 bg-[#8ba888] rounded-full flex items-center justify-center">
                       <UserIcon className="w-3.5 h-3.5 text-[#0f2a43]" />
@@ -107,17 +145,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogo
                 <a href="#struggles" onClick={() => setIsMenuOpen(false)} className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Struggles</a>
                 <a href="#solution" onClick={() => setIsMenuOpen(false)} className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Solution</a>
                 <a href="#how-it-works" onClick={() => setIsMenuOpen(false)} className="text-sm font-medium text-slate-300 hover:text-white transition-colors">How it Works</a>
+                <button onClick={() => { setIsMenuOpen(false); onPricingClick?.(); }} className="text-left text-sm font-medium text-slate-300 hover:text-white transition-colors">Pricing</button>
               </div>
             )}
             
             <div className="pt-4 border-t border-white/10">
               {user ? (
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
-                    <div className="w-8 h-8 bg-[#8ba888] rounded-full flex items-center justify-center">
-                      <UserIcon className="w-4 h-4 text-[#0f2a43]" />
+                  <div className="flex items-center justify-between px-4 py-2 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-[#8ba888] rounded-full flex items-center justify-center">
+                        <UserIcon className="w-4 h-4 text-[#0f2a43]" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-200">{user.name}</span>
                     </div>
-                    <span className="text-sm font-bold text-slate-200">{user.name}</span>
+                    <div className="text-right">
+                      <span className="block text-[10px] uppercase tracking-widest text-slate-400 font-bold">Credits</span>
+                      <span className="text-sm font-bold text-[#00a3e0]">{user.credits ?? 0}</span>
+                    </div>
                   </div>
                   <button 
                     onClick={() => { setIsMenuOpen(false); if (onLogoClick) onLogoClick(); }}
@@ -133,6 +178,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogo
                     <History className="w-4 h-4" />
                     <span className="text-sm font-medium">Scan History</span>
                   </button>
+                  <button 
+                    onClick={() => { setIsMenuOpen(false); onPricingClick?.(); }}
+                    className="w-full flex items-center justify-start space-x-3 px-4 py-3 text-slate-300 hover:text-white transition-colors"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span className="text-sm font-medium">Pricing</span>
+                  </button>
+                  {user.role === 'admin' && (
+                    <button 
+                      onClick={() => { setIsMenuOpen(false); onAdminClick?.(); }}
+                      className="w-full flex items-center justify-start space-x-3 px-4 py-3 text-amber-400 hover:text-amber-300 transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span className="text-sm font-medium">Admin Dashboard</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => { onLogout(); setIsMenuOpen(false); }}
                     className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-red-500/10 text-red-400 rounded-xl font-bold text-sm border border-red-500/20"
@@ -183,7 +244,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onLogo
                 <li><a href="#struggles" className="flex items-center hover:text-[#0f2a43] transition-colors"><span className="w-5 h-5 mr-2 flex items-center justify-center border border-slate-200 rounded-full text-[10px]">?</span> Struggles</a></li>
                 <li><a href="#solution" className="flex items-center hover:text-[#0f2a43] transition-colors"><Zap className="w-4 h-4 mr-2" /> Solution</a></li>
                 <li><a href="#how-it-works" className="flex items-center hover:text-[#0f2a43] transition-colors"><span className="w-5 h-5 mr-2 flex items-center justify-center border border-slate-200 rounded-full text-[10px]">i</span> How it Works</a></li>
-                <li><a href="#join" className="flex items-center hover:text-[#0f2a43] transition-colors"><ArrowRight className="w-4 h-4 mr-2" /> Join Us</a></li>
+                <li><button onClick={onPricingClick} className="flex items-center hover:text-[#0f2a43] transition-colors"><CreditCard className="w-4 h-4 mr-2" /> Pricing</button></li>
               </ul>
             </div>
             

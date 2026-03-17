@@ -55,6 +55,26 @@ export interface User {
   email: string;
   name: string;
   cityTier: 'Tier-1' | 'Tier-2' | 'Tier-3';
+  credits?: number;
+  role?: 'user' | 'admin';
+}
+
+export interface CreditPack {
+  id: string;
+  name: string;
+  price: number;
+  credits: number;
+  label: string;
+  badge?: string;
+  description: string;
+}
+
+export interface UserCredits {
+  user_id: string;
+  credits: number;
+  role: 'user' | 'admin';
+  is_pro: boolean;
+  updated_at: string;
 }
 
 export interface AnalysisState {
