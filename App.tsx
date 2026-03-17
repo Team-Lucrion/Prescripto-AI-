@@ -42,21 +42,22 @@ const App: React.FC = () => {
   }, [getToken]);
 
   const fetchUserCredits = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !clerkUser) return;
     try {
       const token = await getSafeToken();
-      const creditsData = await getCredits(userId, token);
+      const email = clerkUser.primaryEmailAddress?.emailAddress || '';
+      const creditsData = await getCredits(userId, token, email);
       setUserCredits(creditsData);
     } catch (err) {
       console.error('Failed to fetch credits:', err);
     }
-  }, [userId, getSafeToken]);
+  }, [userId, clerkUser, getSafeToken]);
 
   useEffect(() => {
-    if (userId) {
+    if (userId && clerkUser) {
       fetchUserCredits();
     }
-  }, [userId, fetchUserCredits]);
+  }, [userId, clerkUser, fetchUserCredits]);
 
   useEffect(() => {
     if (isClerkLoaded) {
@@ -64,14 +65,21 @@ const App: React.FC = () => {
     }
   }, [isClerkLoaded]);
 
-  const user: User | null = useMemo(() => clerkUser ? {
-    id: clerkUser.id,
-    email: clerkUser.primaryEmailAddress?.emailAddress || '',
-    name: clerkUser.fullName || clerkUser.firstName || 'User',
-    cityTier: (clerkUser.publicMetadata?.cityTier as 'Tier-1' | 'Tier-2' | 'Tier-3') || 'Tier-1',
-    credits: userCredits?.credits ?? 0,
-    role: userCredits?.role ?? 'user'
-  } : null, [clerkUser, userCredits]);
+  const user: User | null = useMemo(() => {
+    if (!clerkUser) return null;
+    const email = clerkUser.primaryEmailAddress?.emailAddress || '';
+    const ADMIN_EMAILS = ['rajathmpatil@gmail.com', 'rahulam19aug@gmail.com', 'bb.build.better@gmail.com'];
+    const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+
+    return {
+      id: clerkUser.id,
+      email: email,
+      name: clerkUser.fullName || clerkUser.firstName || 'User',
+      cityTier: (clerkUser.publicMetadata?.cityTier as 'Tier-1' | 'Tier-2' | 'Tier-3') || 'Tier-1',
+      credits: userCredits?.credits ?? 0,
+      role: isAdmin ? 'admin' : (userCredits?.role ?? 'user')
+    };
+  }, [clerkUser, userCredits]);
   
   const [selectedCityTier, setSelectedCityTier] = useState<'Tier-1' | 'Tier-2' | 'Tier-3' | null>(null);
   const cityTier = selectedCityTier || user?.cityTier || 'Tier-1';
@@ -187,6 +195,13 @@ const App: React.FC = () => {
       // Deduct credits
       const token = await getSafeToken();
       const newCredits = await deductCredits(user.id, cost, token);
+      
+      if (newCredits === null) {
+        setState(prev => ({ ...prev, isAnalyzing: false, error: "Insufficient credits. Please refill." }));
+        setIsBuyModalOpen(true);
+        return;
+      }
+      
       setUserCredits(prev => prev ? { ...prev, credits: newCredits } : null);
 
       setState(prev => ({ ...prev, isAnalyzing: false, result: enriched }));
@@ -252,6 +267,13 @@ const App: React.FC = () => {
 
       const token = await getSafeToken();
       const newCredits = await deductCredits(user.id, upgradeCost, token);
+      
+      if (newCredits === null) {
+        setState(prev => ({ ...prev, isAnalyzing: false, error: "Insufficient credits for upgrade." }));
+        setIsBuyModalOpen(true);
+        return;
+      }
+      
       setUserCredits(prev => prev ? { ...prev, credits: newCredits } : null);
 
       setState(prev => ({ ...prev, isAnalyzing: false, result: enriched }));

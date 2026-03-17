@@ -1,10 +1,11 @@
 import { createClerkSupabaseClient } from '../lib/supabase';
 import { UserCredits } from '../types';
 
-export const getCredits = async (userId: string, getToken: () => Promise<string | null>): Promise<UserCredits | null> => {
+export const getCredits = async (userId: string, token: string | null, email?: string): Promise<UserCredits | null> => {
   try {
-    const token = await getToken();
     const supabase = createClerkSupabaseClient(token);
+    const ADMIN_EMAILS = ['rajathmpatil@gmail.com', 'rahulam19aug@gmail.com', 'bb.build.better@gmail.com'];
+    const isAdmin = email ? ADMIN_EMAILS.includes(email) : false;
     
     const { data, error } = await supabase
       .from('user_credits')
@@ -16,7 +17,12 @@ export const getCredits = async (userId: string, getToken: () => Promise<string 
       // No credits record found, create one
       const { data: newData, error: createError } = await supabase
         .from('user_credits')
-        .insert({ user_id: userId, credits: 5, role: 'user', is_pro: false }) // Give 5 free credits to start
+        .insert({ 
+          user_id: userId, 
+          credits: 5, 
+          role: isAdmin ? 'admin' : 'user', 
+          is_pro: false 
+        }) // Give 5 free credits to start
         .select()
         .single();
       
@@ -24,6 +30,18 @@ export const getCredits = async (userId: string, getToken: () => Promise<string 
       return newData;
     }
     
+    // If record exists but role needs update (e.g. user was added to admin list later)
+    if (data && isAdmin && data.role !== 'admin') {
+      const { data: updatedData, error: updateError } = await supabase
+        .from('user_credits')
+        .update({ role: 'admin' })
+        .eq('user_id', userId)
+        .select()
+        .single();
+      
+      if (!updateError) return updatedData;
+    }
+
     if (error) throw error;
     return data;
   } catch (err) {
@@ -32,9 +50,8 @@ export const getCredits = async (userId: string, getToken: () => Promise<string 
   }
 };
 
-export const deductCredits = async (userId: string, amount: number, getToken: () => Promise<string | null>): Promise<boolean> => {
+export const deductCredits = async (userId: string, amount: number, token: string | null): Promise<number | null> => {
   try {
-    const token = await getToken();
     const supabase = createClerkSupabaseClient(token);
     
     // First check if user is admin
@@ -44,17 +61,20 @@ export const deductCredits = async (userId: string, amount: number, getToken: ()
       .eq('user_id', userId)
       .single();
     
-    if (userCredits?.role === 'admin') return true;
-    if ((userCredits?.credits || 0) < amount) return false;
+    if (userCredits?.role === 'admin') return userCredits.credits;
+    if ((userCredits?.credits || 0) < amount) return null;
+
+    const newCredits = (userCredits?.credits || 0) - amount;
 
     const { error } = await supabase
       .from('user_credits')
-      .update({ credits: (userCredits?.credits || 0) - amount })
+      .update({ credits: newCredits })
       .eq('user_id', userId);
     
-    return !error;
+    if (error) throw error;
+    return newCredits;
   } catch (err) {
     console.error('Error deducting credits:', err);
-    return false;
+    return null;
   }
 };
