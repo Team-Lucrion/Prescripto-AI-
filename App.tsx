@@ -105,7 +105,6 @@ const App: React.FC = () => {
       try {
         const token = await getSafeToken();
         const supabase = createClerkSupabaseClient(token);
-
         const { data, error } = await supabase
           .from('scans')
           .select('*')
@@ -182,7 +181,8 @@ const App: React.FC = () => {
         throw new Error('Unable to read image. Please ensure the photo is clear and contains medical text.');
       }
 
-      const result = await analyzeMedicalDocument(extractedText, analysisMode);
+      // ✅ FIXED: Pass cityTier to the AI service so cost benchmarks are region-accurate
+      const result = await analyzeMedicalDocument(extractedText, analysisMode, cityTier);
 
       const enriched: MedicalAnalysis = {
         ...result,
@@ -191,7 +191,6 @@ const App: React.FC = () => {
         isPro: analysisMode === 'pro',
       };
 
-      // Deduct credits
       const token = await getSafeToken();
       const newCredits = await deductCredits(user.id, cost, token);
 
@@ -204,7 +203,6 @@ const App: React.FC = () => {
       setUserCredits((prev) => (prev ? { ...prev, credits: newCredits } : null));
       setState((prev) => ({ ...prev, isAnalyzing: false, result: enriched }));
 
-      // Save to Supabase
       setIsSaving(true);
       try {
         const supabase = createClerkSupabaseClient(token);
@@ -254,7 +252,8 @@ const App: React.FC = () => {
         throw new Error('Unable to read image. Please ensure the photo is clear.');
       }
 
-      const result = await analyzeMedicalDocument(extractedText, 'pro');
+      // ✅ FIXED: Pass cityTier to the AI service
+      const result = await analyzeMedicalDocument(extractedText, 'pro', cityTier);
       const enriched: MedicalAnalysis = {
         ...result,
         id: state.result.id,
@@ -327,7 +326,7 @@ const App: React.FC = () => {
     );
   }
 
-  // ── App ──────────────────────────────────────────────────────
+  // ── Authenticated App ─────────────────────────────────────────
   return (
     <Layout
       user={user}
@@ -341,7 +340,11 @@ const App: React.FC = () => {
       onAdminClick={() => setView('admin')}
     >
       {view === 'pricing' ? (
-        <PricingPage onBuyClick={() => setIsBuyModalOpen(true)} />
+        // ✅ FIXED: PricingPage props — it expects onBuyCredits and onStartFree, not onBuyClick
+        <PricingPage
+          onBuyCredits={() => setIsBuyModalOpen(true)}
+          onStartFree={() => setView('scan')}
+        />
       ) : view === 'admin' && user.role === 'admin' ? (
         <AdminDashboard />
       ) : (
@@ -361,6 +364,9 @@ const App: React.FC = () => {
                 <option value="Tier-2">Tier 2 (Pune, Jaipur, Lucknow)</option>
                 <option value="Tier-3">Tier 3 / Smaller Towns</option>
               </select>
+              <p className="mt-2 text-[10px] text-slate-400 italic">
+                Used to benchmark hospital charges and medicine prices for your region.
+              </p>
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -395,7 +401,7 @@ const App: React.FC = () => {
             </div>
           </aside>
 
-          {/* Main */}
+          {/* Main content area */}
           <main className="lg:col-span-8">
             {/* Mobile tab bar */}
             <div className="lg:hidden flex p-1 bg-slate-100 rounded-2xl mb-6 no-print">
@@ -422,34 +428,41 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-bold text-[#0f2a43] mb-6 flex items-center">
                   <History className="w-6 h-6 mr-2 text-[#00a3e0]" /> Your Scan History
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {history.map((h) => (
-                    <button
-                      key={h.id}
-                      onClick={() => {
-                        setState((p) => ({ ...p, result: h }));
-                        setView('scan');
-                      }}
-                      className="text-left p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:border-[#00a3e0]/30 transition-all group"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="px-3 py-1 bg-[#e0f2fe] text-[#00a3e0] text-[10px] font-bold rounded-full uppercase tracking-wider">
-                          {h.documentType.replace('_', ' ')}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {new Date(h.timestamp || 0).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-sm font-bold text-[#0f2a43] mb-2 line-clamp-2 group-hover:text-[#00a3e0] transition-colors">
-                        {h.summary}
-                      </p>
-                      <div className="flex items-center text-[#00a3e0] text-[10px] font-bold uppercase tracking-widest">
-                        <span>View Analysis</span>
-                        <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {history.length === 0 ? (
+                  <div className="text-center py-20 bg-white rounded-[2.5rem] border border-slate-100">
+                    <History className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-400 font-medium">No scans yet. Upload a document to get started.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {history.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => {
+                          setState((p) => ({ ...p, result: h }));
+                          setView('scan');
+                        }}
+                        className="text-left p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:border-[#00a3e0]/30 transition-all group"
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <span className="px-3 py-1 bg-[#e0f2fe] text-[#00a3e0] text-[10px] font-bold rounded-full uppercase tracking-wider">
+                            {h.documentType.replace('_', ' ')}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {new Date(h.timestamp || 0).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold text-[#0f2a43] mb-2 line-clamp-2 group-hover:text-[#00a3e0] transition-colors">
+                          {h.summary}
+                        </p>
+                        <div className="flex items-center text-[#00a3e0] text-[10px] font-bold uppercase tracking-widest">
+                          <span>View Analysis</span>
+                          <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : state.isAnalyzing ? (
               <div className="bg-white p-20 rounded-[3rem] text-center border border-slate-100 flex flex-col items-center shadow-sm">
@@ -471,7 +484,9 @@ const App: React.FC = () => {
                   {isSaving && <span className="text-xs text-slate-400 animate-pulse">Saving...</span>}
                 </div>
                 <AnalysisView analysis={state.result} />
-                {!state.result.isPro && <ProUpsell onUpgrade={handleUpgradeToPro} isProcessing={state.isAnalyzing} />}
+                {!state.result.isPro && (
+                  <ProUpsell onUpgrade={handleUpgradeToPro} isProcessing={state.isAnalyzing} />
+                )}
               </div>
             ) : (
               <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm text-center">
