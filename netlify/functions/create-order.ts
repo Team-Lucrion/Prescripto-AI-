@@ -18,28 +18,47 @@ export const handler: Handler = async (event: HandlerEvent) => {
   const key_id = process.env.RAZORPAY_KEY_ID;
   const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
+  // Log env status (never log actual values)
+  console.log('Env check — key_id present:', !!key_id, '| key_secret present:', !!key_secret);
+
   if (!key_id || !key_secret) {
-    console.error('Razorpay keys missing from environment');
     return {
       statusCode: 500,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'Payment service not configured. Please contact support.' }),
+      body: JSON.stringify({ 
+        error: 'Payment service not configured.',
+        debug: `key_id: ${!!key_id}, key_secret: ${!!key_secret}` 
+      }),
+    };
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(event.body || '{}');
+    console.log('Request body parsed — amount:', parsed.amount);
+  } catch (e) {
+    return {
+      statusCode: 400,
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ error: 'Invalid request body' }),
+    };
+  }
+
+  const { amount, currency = 'INR', receipt } = parsed;
+
+  if (!amount || amount <= 0) {
+    return {
+      statusCode: 400,
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ error: 'Invalid amount: ' + amount }),
     };
   }
 
   try {
-    const { amount, currency = 'INR', receipt } = JSON.parse(event.body || '{}');
-
-    if (!amount || amount <= 0) {
-      return {
-        statusCode: 400,
-        headers: CORS_HEADERS,
-        body: JSON.stringify({ error: 'Invalid amount' }),
-      };
-    }
-
-    // Call Razorpay REST API directly — no SDK needed, works in any environment
     const credentials = Buffer.from(`${key_id}:${key_secret}`).toString('base64');
+    const amountInPaise = Math.round(Number(amount) * 100);
+
+    console.log('Calling Razorpay API — amount in paise:', amountInPaise, '| currency:', currency);
 
     const razorpayRes = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
@@ -48,20 +67,34 @@ export const handler: Handler = async (event: HandlerEvent) => {
         'Authorization': `Basic ${credentials}`,
       },
       body: JSON.stringify({
-        amount: Math.round(amount * 100), // INR to paise
+        amount: amountInPaise,
         currency,
         receipt: receipt || `receipt_${Date.now()}`,
       }),
     });
 
-    const order = await razorpayRes.json();
+    const responseText = await razorpayRes.text();
+    console.log('Razorpay response status:', razorpayRes.status, '| body:', responseText);
+
+    let order: any;
+    try {
+      order = JSON.parse(responseText);
+    } catch {
+      return {
+        statusCode: 500,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: 'Razorpay returned invalid JSON: ' + responseText }),
+      };
+    }
 
     if (!razorpayRes.ok) {
-      console.error('Razorpay API error:', order);
       return {
         statusCode: razorpayRes.status,
         headers: CORS_HEADERS,
-        body: JSON.stringify({ error: order?.error?.description || 'Failed to create order' }),
+        body: JSON.stringify({ 
+          error: order?.error?.description || 'Razorpay order creation failed',
+          razorpay_error: order?.error || order,
+        }),
       };
     }
 
@@ -70,12 +103,12 @@ export const handler: Handler = async (event: HandlerEvent) => {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     };
-  } catch (error) {
-    console.error('Error creating Razorpay order:', error);
+  } catch (error: any) {
+    console.error('Unexpected error:', error);
     return {
       statusCode: 500,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'Failed to create order. Please try again.' }),
+      body: JSON.stringify({ error: error?.message || 'Unexpected server error' }),
     };
   }
 };
